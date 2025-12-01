@@ -233,6 +233,21 @@ def analyze_golf_swing(video_path):
             max(hip_line_angles) - min(hip_line_angles), 2
         )
 
+    # 스윙이 아닌 일반적인 움직임(작은 회전, 작은 백스윙 등)을 필터링하기 위한 최소 기준
+    # 너무 엄격하면 정상 스윙도 막힐 수 있으니, 일단 느슨한 값으로 시작해서 현장에서 튜닝
+    MIN_BACKSWING_ANGLE = 60.0      # 백스윙 최대 각도 최소 기준 (대략 어깨 정도까지는 올라가야 함)
+    MIN_SHOULDER_ROT = 25.0        # 어깨 회전 범위 최소 기준
+    MIN_HIP_ROT = 10.0             # 골반 회전 범위 최소 기준
+
+    # 백스윙 각도가 너무 작고, 회전 범위도 매우 작으면 골프 스윙이 아니라고 간주
+    # (단순 팔 움직임, 서 있는 자세 등)
+    if (
+        max_backswing_angle < MIN_BACKSWING_ANGLE and
+        (shoulder_rotation_range is None or shoulder_rotation_range < MIN_SHOULDER_ROT) and
+        (hip_rotation_range is None or hip_rotation_range < MIN_HIP_ROT)
+    ):
+        return {"error": "스윙 자세를 감지할 수 없습니다"}
+
     # 4) 회전 효율 (rotation_efficiency: 0~100)
     rotation_efficiency = None
     if (

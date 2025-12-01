@@ -52,6 +52,7 @@ def analyze_golf_swing(video_path):
     wrist_frame_indices = []   # 손목 좌표에 대응하는 프레임 인덱스
 
     prev_wrist_pos = None
+    max_shoulder_span = 0.0    # 화면 대비 좌우 어깨 간 거리의 최대값 (가까운 사람만 통과시키기 위함)
 
     with mp_pose.Pose(
         static_image_mode=False,
@@ -125,6 +126,11 @@ def analyze_golf_swing(video_path):
             shoulder_dy = left_shoulder[1] - right_shoulder[1]
             shoulder_angle = math.degrees(math.atan2(shoulder_dy, shoulder_dx))
             shoulder_line_angles.append(shoulder_angle)
+
+            # 어깨 간 수평 거리 (사람이 화면에서 얼마나 크게 보이는지 추정)
+            shoulder_span = abs(shoulder_dx)
+            if shoulder_span > max_shoulder_span:
+                max_shoulder_span = shoulder_span
 
             # 골반 라인 각도 (오른엉덩이→왼엉덩이)
             hip_dx = left_hip[0] - right_hip[0]
@@ -236,8 +242,9 @@ def analyze_golf_swing(video_path):
     # 스윙이 아닌 일반적인 움직임(작은 회전, 작은 백스윙 등)을 필터링하기 위한 최소 기준
     # 너무 엄격하면 정상 스윙도 막힐 수 있으니, 일단 느슨한 값으로 시작해서 현장에서 튜닝
     MIN_BACKSWING_ANGLE = 60.0      # 백스윙 최대 각도 최소 기준 (대략 어깨 정도까지는 올라가야 함)
-    MIN_SHOULDER_ROT = 25.0        # 어깨 회전 범위 최소 기준
-    MIN_HIP_ROT = 10.0             # 골반 회전 범위 최소 기준
+    MIN_SHOULDER_ROT = 25.0         # 어깨 회전 범위 최소 기준
+    MIN_HIP_ROT = 10.0              # 골반 회전 범위 최소 기준
+    MIN_SHOULDER_SPAN = 0.10        # 어깨 간 거리 최소 비율 (프레임 너비 대비, 사람 크기 필터)
 
     # 백스윙 각도가 너무 작고, 회전 범위도 매우 작으면 골프 스윙이 아니라고 간주
     # (단순 팔 움직임, 서 있는 자세 등)
@@ -245,6 +252,14 @@ def analyze_golf_swing(video_path):
         max_backswing_angle < MIN_BACKSWING_ANGLE and
         (shoulder_rotation_range is None or shoulder_rotation_range < MIN_SHOULDER_ROT) and
         (hip_rotation_range is None or hip_rotation_range < MIN_HIP_ROT)
+    ):
+        return {"error": "스윙 자세를 감지할 수 없습니다"}
+
+    # 화면 속 작은 캐릭터(스크린 골프 아바타)와 실제 사람을 구분하기 위한 추가 필터
+    # 실제 사람이 카메라에 어느 정도 가깝게 찍혔다면 어깨 간 거리 비율이 0.1~0.2 이상 나오는 경우가 많음.
+    # 어깨 간 거리가 너무 작다면 (예: 스크린 속 캐릭터만 보이는 경우) 스윙으로 보지 않음.
+    if max_shoulder_span < MIN_SHOULDER_SPAN:
+        return {"error": "스윙하는 사람의 전체 몸이 화면에 충분히 보이지 않습니다."}
     ):
         return {"error": "스윙 자세를 감지할 수 없습니다"}
 

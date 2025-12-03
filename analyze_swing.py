@@ -260,8 +260,6 @@ def analyze_golf_swing(video_path):
     # 어깨 간 거리가 너무 작다면 (예: 스크린 속 캐릭터만 보이는 경우) 스윙으로 보지 않음.
     if max_shoulder_span < MIN_SHOULDER_SPAN:
         return {"error": "스윙하는 사람의 전체 몸이 화면에 충분히 보이지 않습니다."}
-    ):
-        return {"error": "스윙 자세를 감지할 수 없습니다"}
 
     # 4) 회전 효율 (rotation_efficiency: 0~100)
     rotation_efficiency = None

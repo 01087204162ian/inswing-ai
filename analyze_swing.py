@@ -240,14 +240,15 @@ def analyze_golf_swing(video_path):
         )
 
     # 스윙이 아닌 일반적인 움직임(작은 회전, 작은 백스윙 등)을 필터링하기 위한 최소 기준
-    # 너무 엄격하면 정상 스윙도 막힐 수 있으니, 일단 느슨한 값으로 시작해서 현장에서 튜닝
-    MIN_BACKSWING_ANGLE = 60.0      # 백스윙 최대 각도 최소 기준 (대략 어깨 정도까지는 올라가야 함)
-    MIN_SHOULDER_ROT = 25.0         # 어깨 회전 범위 최소 기준
-    MIN_HIP_ROT = 10.0              # 골반 회전 범위 최소 기준
-    MIN_SHOULDER_SPAN = 0.10        # 어깨 간 거리 최소 비율 (프레임 너비 대비, 사람 크기 필터)
+    # 너무 엄격하면 정상 스윙도 막힐 수 있으니, 느슨한 값으로 설정 (현장에서 튜닝 필요)
+    MIN_BACKSWING_ANGLE = 40.0      # 백스윙 최대 각도 최소 기준 (완화: 60 -> 40)
+    MIN_SHOULDER_ROT = 15.0         # 어깨 회전 범위 최소 기준 (완화: 25 -> 15)
+    MIN_HIP_ROT = 5.0              # 골반 회전 범위 최소 기준 (완화: 10 -> 5)
+    MIN_SHOULDER_SPAN = 0.05        # 어깨 간 거리 최소 비율 (완화: 0.10 -> 0.05)
 
     # 백스윙 각도가 너무 작고, 회전 범위도 매우 작으면 골프 스윙이 아니라고 간주
     # (단순 팔 움직임, 서 있는 자세 등)
+    # 조건을 더 느슨하게: AND 조건이므로 모든 조건이 동시에 만족되어야만 필터링
     if (
         max_backswing_angle < MIN_BACKSWING_ANGLE and
         (shoulder_rotation_range is None or shoulder_rotation_range < MIN_SHOULDER_ROT) and
@@ -256,8 +257,9 @@ def analyze_golf_swing(video_path):
         return {"error": "스윙 자세를 감지할 수 없습니다"}
 
     # 화면 속 작은 캐릭터(스크린 골프 아바타)와 실제 사람을 구분하기 위한 추가 필터
-    # 실제 사람이 카메라에 어느 정도 가깝게 찍혔다면 어깨 간 거리 비율이 0.1~0.2 이상 나오는 경우가 많음.
+    # 실제 사람이 카메라에 어느 정도 가깝게 찍혔다면 어깨 간 거리 비율이 0.05 이상 나오는 경우가 많음.
     # 어깨 간 거리가 너무 작다면 (예: 스크린 속 캐릭터만 보이는 경우) 스윙으로 보지 않음.
+    # 기준을 완화하여 실제 사람 스윙은 통과시키되, 스크린 아바타는 필터링
     if max_shoulder_span < MIN_SHOULDER_SPAN:
         return {"error": "스윙하는 사람의 전체 몸이 화면에 충분히 보이지 않습니다."}
 

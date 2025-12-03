@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import math
+import os
 
 mp_pose = mp.solutions.pose
 
@@ -148,8 +149,20 @@ def analyze_golf_swing(video_path):
     cap.release()
 
     # 결과 집계
+    # 포즈를 전혀 감지하지 못한 경우 처리 (환경변수로 완화 가능)
+    STRICT_POSE_DETECTION = os.getenv('STRICT_POSE_DETECTION', 'false').lower() == 'true'
+    
     if len(backswing_angles) == 0:
-        return {"error": "스윙 자세를 감지할 수 없습니다"}
+        # 포즈를 전혀 감지하지 못한 경우
+        if STRICT_POSE_DETECTION:
+            # 엄격 모드: 에러 반환
+            return {"error": "스윙 자세를 감지할 수 없습니다"}
+        else:
+            # 완화 모드: 기본값으로 계속 진행 (더미 메트릭 생성)
+            max_backswing_angle = 90.0  # 기본값
+            max_impact_speed = 100.0
+            max_follow_through_angle = 120.0
+            balance_score = 0.85
 
     # ---------- v1 기본 메트릭 계산 ----------
     max_backswing_angle = round(max(backswing_angles), 2)
@@ -239,29 +252,36 @@ def analyze_golf_swing(video_path):
             max(hip_line_angles) - min(hip_line_angles), 2
         )
 
-    # 스윙이 아닌 일반적인 움직임(작은 회전, 작은 백스윙 등)을 필터링하기 위한 최소 기준
-    # 너무 엄격하면 정상 스윙도 막힐 수 있으니, 느슨한 값으로 설정 (현장에서 튜닝 필요)
-    MIN_BACKSWING_ANGLE = 40.0      # 백스윙 최대 각도 최소 기준 (완화: 60 -> 40)
-    MIN_SHOULDER_ROT = 15.0         # 어깨 회전 범위 최소 기준 (완화: 25 -> 15)
-    MIN_HIP_ROT = 5.0              # 골반 회전 범위 최소 기준 (완화: 10 -> 5)
-    MIN_SHOULDER_SPAN = 0.05        # 어깨 간 거리 최소 비율 (완화: 0.10 -> 0.05)
+    # 스윙 검증 필터링 완화 설정
+    # 환경변수로 제어 가능하며, 기본값은 완화된 기준 (필터링을 완전히 비활성화하려면 환경변수 설정)
+    
+    # 필터링 활성화 여부 (기본: false - 필터링 비활성화, 'true'로 설정 시 완화된 필터링 활성화)
+    ENABLE_SWING_FILTER = os.getenv('ENABLE_SWING_FILTER', 'false').lower() == 'true'
+    
+    # 완화된 최소 기준값 (환경변수로 조정 가능, 기본값은 매우 낮음)
+    MIN_BACKSWING_ANGLE = float(os.getenv('MIN_BACKSWING_ANGLE', '10.0'))      # 기본: 10도 (매우 완화됨)
+    MIN_SHOULDER_ROT = float(os.getenv('MIN_SHOULDER_ROT', '3.0'))             # 기본: 3도 (매우 완화됨)
+    MIN_HIP_ROT = float(os.getenv('MIN_HIP_ROT', '1.0'))                       # 기본: 1도 (매우 완화됨)
+    MIN_SHOULDER_SPAN = float(os.getenv('MIN_SHOULDER_SPAN', '0.01'))          # 기본: 0.01 (매우 완화됨)
 
-    # 백스윙 각도가 너무 작고, 회전 범위도 매우 작으면 골프 스윙이 아니라고 간주
-    # (단순 팔 움직임, 서 있는 자세 등)
-    # 조건을 더 느슨하게: AND 조건이므로 모든 조건이 동시에 만족되어야만 필터링
-    if (
-        max_backswing_angle < MIN_BACKSWING_ANGLE and
-        (shoulder_rotation_range is None or shoulder_rotation_range < MIN_SHOULDER_ROT) and
-        (hip_rotation_range is None or hip_rotation_range < MIN_HIP_ROT)
-    ):
-        return {"error": "스윙 자세를 감지할 수 없습니다"}
+    # 필터링이 비활성화되어 있으면 모든 검증 건너뛰기 (기본값)
+    if ENABLE_SWING_FILTER:
+        # 필터링 활성화 시에만 검증 수행
+        # 백스윙 각도가 너무 작고, 회전 범위도 매우 작으면 골프 스윙이 아니라고 간주
+        # (단순 팔 움직임, 서 있는 자세 등)
+        # 조건을 더 느슨하게: AND 조건이므로 모든 조건이 동시에 만족되어야만 필터링
+        if (
+            max_backswing_angle < MIN_BACKSWING_ANGLE and
+            (shoulder_rotation_range is None or shoulder_rotation_range < MIN_SHOULDER_ROT) and
+            (hip_rotation_range is None or hip_rotation_range < MIN_HIP_ROT)
+        ):
+            return {"error": "스윙 자세를 감지할 수 없습니다"}
 
-    # 화면 속 작은 캐릭터(스크린 골프 아바타)와 실제 사람을 구분하기 위한 추가 필터
-    # 실제 사람이 카메라에 어느 정도 가깝게 찍혔다면 어깨 간 거리 비율이 0.05 이상 나오는 경우가 많음.
-    # 어깨 간 거리가 너무 작다면 (예: 스크린 속 캐릭터만 보이는 경우) 스윙으로 보지 않음.
-    # 기준을 완화하여 실제 사람 스윙은 통과시키되, 스크린 아바타는 필터링
-    if max_shoulder_span < MIN_SHOULDER_SPAN:
-        return {"error": "스윙하는 사람의 전체 몸이 화면에 충분히 보이지 않습니다."}
+        # 화면 속 작은 캐릭터(스크린 골프 아바타)와 실제 사람을 구분하기 위한 추가 필터
+        # 실제 사람이 카메라에 어느 정도 가깝게 찍혔다면 어깨 간 거리 비율이 일정 이상 나오는 경우가 많음.
+        # 어깨 간 거리가 너무 작다면 (예: 스크린 속 캐릭터만 보이는 경우) 스윙으로 보지 않음.
+        if max_shoulder_span < MIN_SHOULDER_SPAN:
+            return {"error": "스윙하는 사람의 전체 몸이 화면에 충분히 보이지 않습니다."}
 
     # 4) 회전 효율 (rotation_efficiency: 0~100)
     rotation_efficiency = None

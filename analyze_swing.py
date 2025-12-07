@@ -338,6 +338,19 @@ def analyze_golf_swing(video_path):
         weighted_sum = sum(s * w for s, w in zip(component_scores, component_weights))
         overall_score = int(round(weighted_sum / total_w))
 
+    # 문서 요구사항: invalid_swing 플래그 추가
+    invalid_swing = False
+    if ENABLE_SWING_FILTER:
+        # 필터링이 활성화된 경우에만 invalid_swing 판정
+        if (
+            max_backswing_angle < MIN_BACKSWING_ANGLE and
+            (shoulder_rotation_range is None or shoulder_rotation_range < MIN_SHOULDER_ROT) and
+            (hip_rotation_range is None or hip_rotation_range < MIN_HIP_ROT)
+        ):
+            invalid_swing = True
+        elif max_shoulder_span < MIN_SHOULDER_SPAN:
+            invalid_swing = True
+
     # 최종 결과
     result = {
         # v1 기본 메트릭
@@ -359,6 +372,9 @@ def analyze_golf_swing(video_path):
         # 참고 정보
         "frames_analyzed": frame_count,
         "total_frames": total_frames,
+        
+        # 문서 요구사항: invalid_swing 플래그
+        "invalid_swing": invalid_swing,
     }
 
     return result

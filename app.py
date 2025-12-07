@@ -47,9 +47,14 @@ def analyze():
         if 'error' in result:
             return jsonify(result), 400
         
+        # 문서 요구사항에 맞게 응답 형식 변경
+        invalid_swing = result.pop('invalid_swing', False)  # result에서 제거하고 별도로 관리
+        analysis_version = 'v2'  # 현재 버전
+        
         return jsonify({
-            'ok': True,
-            'analysis': result
+            'metrics': result,
+            'analysis_version': analysis_version,
+            'invalid_swing': invalid_swing
         })
         
     except Exception as e:

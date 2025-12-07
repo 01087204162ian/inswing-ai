@@ -152,6 +152,9 @@ def analyze_golf_swing(video_path):
     # 포즈를 전혀 감지하지 못한 경우 처리 (환경변수로 완화 가능)
     STRICT_POSE_DETECTION = os.getenv('STRICT_POSE_DETECTION', 'false').lower() == 'true'
     
+    # ---------- v1 기본 메트릭 계산 ----------
+    # 빈 리스트 체크 및 기본값 설정
+    # backswing_angles가 비어있으면 다른 리스트도 비어있을 가능성이 높음
     if len(backswing_angles) == 0:
         # 포즈를 전혀 감지하지 못한 경우
         if STRICT_POSE_DETECTION:
@@ -163,16 +166,19 @@ def analyze_golf_swing(video_path):
             max_impact_speed = 100.0
             max_follow_through_angle = 120.0
             balance_score = 0.85
-
-    # ---------- v1 기본 메트릭 계산 ----------
-    max_backswing_angle = round(max(backswing_angles), 2)
-
-    if impact_speeds:
-        max_impact_speed = round(max(impact_speeds), 2)
     else:
-        max_impact_speed = 0.0
+        # 정상적인 경우: 실제 계산
+        max_backswing_angle = round(max(backswing_angles), 2)
 
-    max_follow_through_angle = round(max(follow_through_angles), 2)
+        if impact_speeds:
+            max_impact_speed = round(max(impact_speeds), 2)
+        else:
+            max_impact_speed = 0.0
+
+        if follow_through_angles:
+            max_follow_through_angle = round(max(follow_through_angles), 2)
+        else:
+            max_follow_through_angle = 0.0
 
     if balance_scores:
         balance_mean = float(np.mean(balance_scores))
@@ -243,14 +249,22 @@ def analyze_golf_swing(video_path):
     hip_rotation_range = None
 
     if len(shoulder_line_angles) >= 2:
-        shoulder_rotation_range = round(
-            max(shoulder_line_angles) - min(shoulder_line_angles), 2
-        )
+        try:
+            shoulder_rotation_range = round(
+                max(shoulder_line_angles) - min(shoulder_line_angles), 2
+            )
+        except ValueError:
+            # 빈 리스트인 경우 (이론적으로는 발생하지 않아야 하지만 안전장치)
+            shoulder_rotation_range = None
 
     if len(hip_line_angles) >= 2:
-        hip_rotation_range = round(
-            max(hip_line_angles) - min(hip_line_angles), 2
-        )
+        try:
+            hip_rotation_range = round(
+                max(hip_line_angles) - min(hip_line_angles), 2
+            )
+        except ValueError:
+            # 빈 리스트인 경우 (이론적으로는 발생하지 않아야 하지만 안전장치)
+            hip_rotation_range = None
 
     # 스윙 검증 필터링 완화 설정
     # 환경변수로 제어 가능하며, 기본값은 완화된 기준 (필터링을 완전히 비활성화하려면 환경변수 설정)
